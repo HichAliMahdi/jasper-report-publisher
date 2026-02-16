@@ -464,20 +464,13 @@ function pwd_vis(pwd_field_id) {
 							</p>
 						<?php foreach($smtp_keys as $k => $t){ ?>
 							<input type="<?=$t?>" class="form-control" placeholder="<?=$k?> (optional)" id="smtp_<?=$k?>" name="smtp_<?=$k?>" value="<?=$values['smtp_'.$k]?>">
-										<i id="smtp_pass_vis_i" class="material-icons" style="color:grey">visibility</i>
-									</a>
-								<?php } ?>
-							<?php } ?>
-							</div>
-						</fieldset>
+						<?php if($k == 'pass'){ ?>
+							<a class="icon-link" href="#" title="Show Password" data-toggle="tooltip" data-placement="bottom" data-trigger="hover" onclick="pwd_vis('smtp_pass')">
+								<i id="smtp_pass_vis_i" class="material-icons" style="color:grey">visibility</i>
+							</a>
+						<?php } ?>
+					<?php } ?>
 					</div>
-					
-					<div>
-						<fieldset>
-						<legend>Options</legend>
-							<div class="form-group">
-								<input type="checkbox" class="form-checkbox" placeholder="sample data" name="load_sample_data" value="1"/>
-								<label for="load_sample_data">Load Sample Data (Recommended)</label>
 							</div>
 						</fieldset>
 					</div>
