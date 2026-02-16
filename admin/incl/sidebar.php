@@ -98,6 +98,8 @@
 				//sidebar_row('files.php?p=',				'folder',										'Files');
 				//sidebar_row('permalinks.php',			'share-variant',						'Share');
 				echo "<hr style='border-color: #e9ecef!important;'>";
+				sidebar_row('diagnostics.php',		'settings-box',							'System Diagnostics');
+				echo "<hr style='border-color: #e9ecef!important;'>";
 				sidebar_row('../index.php',				'exit-to-app',							'Front End');
 				sidebar_row('../logout.php',			'logout',										'Log Out');
 				?>

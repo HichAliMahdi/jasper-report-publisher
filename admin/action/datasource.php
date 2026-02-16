@@ -296,6 +296,143 @@
 				}else{
 					$result = ['success' => true, 'message' => $row['password']];
 				}
+			} else if(isset($_POST['test'])) {
+				
+				$row = $obj->getById($ds_id);
+				if($row == FALSE){
+					$result = ['success' => false, 'message' => 'Datasource not found!'];
+				}else{
+					// Test the datasource connection
+					$url = $row['url'];
+					$username = $row['username'];
+					$password = $row['password'];
+					
+					$db_type = '';
+					$host = '';
+					$port = '';
+					$dbname = '';
+					
+					// Parse connection string based on database type
+					if(str_starts_with($url, 'jdbc:postgresql')){
+						$db_type = 'PostgreSQL';
+						
+						// Check if pgsql extension is loaded
+						if(!extension_loaded('pgsql')){
+							$result = ['success' => false, 'message' => "Failed to test $db_type connection.\\n\\nError: pgsql extension is not installed or enabled in PHP."];
+						} else if(preg_match('/jdbc:postgresql:\\/\\/([^:\\/]+):?(\\d+)?\\\/([^?\\s]+)/', $url, $matches)){
+							// jdbc:postgresql://host:port/database or jdbc:postgresql://host/database
+							$host = $matches[1];
+							$port = isset($matches[2]) && $matches[2] ? intval($matches[2]) : 5432;
+							$dbname = $matches[3];
+							
+							try {
+								$conn = @pg_connect("host=$host port=$port dbname=$dbname user=$username password=$password connect_timeout=5");
+								if($conn){
+									$version = pg_version($conn);
+									pg_close($conn);
+									$result = [
+										'success' => true, 
+										'message' => "Successfully connected to $db_type database.\\nHost: $host:$port\\nDatabase: $dbname\\nServer version: " . $version['server']
+									];
+								} else {
+									$error = pg_last_error();
+									$result = ['success' => false, 'message' => "Failed to connect to $db_type database.\\n\\nHost: $host:$port\\nDatabase: $dbname\\nError: " . ($error ? $error : 'Unknown error')];
+								}
+							} catch (Exception $e) {
+								$result = ['success' => false, 'message' => "Failed to connect to $db_type database.\\n\\nError: " . $e->getMessage()];
+							}
+						} else {
+							$result = ['success' => false, 'message' => 'Invalid PostgreSQL JDBC URL format.\\nExpected: jdbc:postgresql://host:port/database or jdbc:postgresql://host/database\\nReceived: ' . $url];
+						}
+						
+					} else if(str_starts_with($url, 'jdbc:mysql')){
+						$db_type = 'MySQL';
+						
+						// Check if mysqli extension is loaded
+						if(!extension_loaded('mysqli')){
+							$result = ['success' => false, 'message' => "Failed to test $db_type connection.\\n\\nError: mysqli extension is not installed or enabled in PHP."];
+						} else if(preg_match('/jdbc:mysql:\/\/([^\/]+)\/([^?\s]+)/', $url, $matches)){
+							// jdbc:mysql://host:port/database or jdbc:mysql://host/database
+							$hostport = $matches[1];
+							$dbname = $matches[2];
+							
+							// Parse host and port
+							if(strpos($hostport, ':') !== false){
+								list($host, $port) = explode(':', $hostport, 2);
+								$port = intval($port);
+							} else {
+								$host = $hostport;
+								$port = 3306;
+							}
+							
+							try {
+								$conn = @new mysqli($host, $username, $password, $dbname, $port);
+								if($conn->connect_error){
+									$result = ['success' => false, 'message' => "Failed to connect to $db_type database.\\n\\nHost: $host:$port\\nDatabase: $dbname\\nError: " . $conn->connect_error];
+								} else {
+									$version = $conn->server_info;
+									$conn->close();
+									$result = [
+										'success' => true, 
+										'message' => "Successfully connected to $db_type database.\\nHost: $host:$port\\nDatabase: $dbname\\nServer version: $version"
+									];
+								}
+							} catch (Exception $e) {
+								$result = ['success' => false, 'message' => "Failed to connect to $db_type database.\\n\\nError: " . $e->getMessage()];
+							}
+						} else {
+							$result = ['success' => false, 'message' => 'Invalid MySQL JDBC URL format.\\nExpected: jdbc:mysql://host:port/database or jdbc:mysql://host/database\\nReceived: ' . $url];
+						}
+						
+					} else if(str_starts_with($url, 'jdbc:sqlserver')){
+						$db_type = 'MS SQL Server';
+						
+						// Check if sqlsrv extension is loaded
+						if(!extension_loaded('sqlsrv')){
+							$result = ['success' => false, 'message' => "Failed to test $db_type connection.\\n\\nError: sqlsrv extension is not installed or enabled in PHP."];
+						} else if(preg_match('/jdbc:sqlserver:\\/\\/([^:;]+):?(\\d+)?;?.*databaseName=([^;]+)/', $url, $matches)){
+							// jdbc:sqlserver://host:port;databaseName=database
+							$host = $matches[1];
+							$port = isset($matches[2]) && $matches[2] ? intval($matches[2]) : 1433;
+							$dbname = $matches[3];
+							
+							try {
+								$connectionInfo = array(
+									"Database" => $dbname,
+									"UID" => $username,
+									"PWD" => $password,
+									"LoginTimeout" => 5
+								);
+								
+								$conn = @sqlsrv_connect($host . ',' . $port, $connectionInfo);
+								if($conn === false){
+									$errors = sqlsrv_errors();
+									$error_msg = '';
+									if($errors){
+										foreach($errors as $error){
+											$error_msg .= $error['message'] . '\\n';
+										}
+									}
+									$result = ['success' => false, 'message' => "Failed to connect to $db_type database.\\n\\nHost: $host:$port\\nDatabase: $dbname\\nError: " . ($error_msg ? $error_msg : 'Unknown error')];
+								} else {
+									$server_info = sqlsrv_server_info($conn);
+									sqlsrv_close($conn);
+									$result = [
+										'success' => true, 
+										'message' => "Successfully connected to $db_type database.\\nHost: $host:$port\\nDatabase: $dbname\\nServer version: " . $server_info['SQLServerVersion']
+									];
+								}
+							} catch (Exception $e) {
+								$result = ['success' => false, 'message' => "Failed to connect to $db_type database.\\n\\nError: " . $e->getMessage()];
+							}
+						} else {
+							$result = ['success' => false, 'message' => 'Invalid MS SQL Server JDBC URL format.\\nExpected: jdbc:sqlserver://host:port;databaseName=database\\nReceived: ' . $url];
+						}
+						
+					} else {
+						$result = ['success' => false, 'message' => 'Unsupported database type. Supported types are: PostgreSQL, MySQL, MS SQL Server'];
+					}
+				}
 			}
     }
 

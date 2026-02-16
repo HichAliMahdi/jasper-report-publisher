@@ -62,8 +62,14 @@
 					<a class="action-icon edit" title="Edit" data-toggle="tooltip">
 						<i class="material-icons">&#xE254;</i>
 					</a>
+					<a class="action-icon test" title="Test Connection" data-toggle="tooltip">
+						<i class="material-icons">&#xE8F4;</i>
+					</a>
 					<a class="action-icon delete" title="Delete" data-toggle="tooltip">
 						<i class="material-icons">&#xE872;</i>
+					</a>
+					<a class="action-icon pwd_vis" title="Show Password" data-toggle="tooltip">
+						<i class="material-icons">visibility</i>
 					</a>
 				`;
 				
@@ -148,7 +154,7 @@
 							if(response.id) {
 								obj.closest('table').find('tr:last-child').attr('data-id', response.id);
 							}
-							alert(response.message)
+							showModal(response.success ? 'Success' : 'Error', response.message, response.success ? 'success' : 'error');
 						}
 					});
 
@@ -210,36 +216,158 @@
 				$(".add-new").attr("disabled", "disabled");
 			});
 
+			// Test datasource connection
+			$(document).on("click", ".test", function() {
+				var obj = $(this);
+				var id = obj.parents("tr").attr('data-id');
+				
+				if(!id) {
+					showModal('Warning', 'Please save the datasource before testing the connection.', 'warning');
+					return;
+				}
+				
+				var data = {'test': true, 'id': id};
+				
+				// Disable button and show loading state
+				obj.css('pointer-events', 'none').css('opacity', '0.5');
+				
+				$.ajax({
+					type: "POST",
+					url: 'action/<?=$action?>.php',
+					data: data,
+					dataType:"json",
+					success: function(response){
+						obj.css('pointer-events', 'auto').css('opacity', '1');
+						
+						if(response.success) {
+							showModal('Connection Successful', response.message, 'success');
+						} else {
+							showModal('Connection Failed', response.message, 'error');
+						}
+					},
+					error: function(xhr, status, error) {
+						obj.css('pointer-events', 'auto').css('opacity', '1');
+						showModal('Connection Test Failed', 'Error: ' + error, 'error');
+					}
+				});
+			});
+			
+			// Modal dialog function
+			function showModal(title, message, type) {
+				var iconHtml = '';
+				var iconColor = '';
+				
+				if(type === 'success') {
+					iconHtml = '<div class="modal-icon-success"><i class="material-icons">check_circle</i></div>';
+					iconColor = '#10b981';
+				} else if(type === 'error') {
+					iconHtml = '<div class="modal-icon-error"><i class="material-icons">cancel</i></div>';
+					iconColor = '#ef4444';
+				} else if(type === 'warning') {
+					iconHtml = '<div class="modal-icon-warning"><i class="material-icons">warning</i></div>';
+					iconColor = '#f59e0b';
+				}
+				
+				// Remove existing modal if any
+				$('#testModal').remove();
+				
+				var modalHtml = `
+					<div id="testModal" class="test-modal-overlay">
+						<div class="test-modal">
+							<div class="test-modal-header">
+								${iconHtml}
+								<h3 style="color: ${iconColor}">${title}</h3>
+							</div>
+							<div class="test-modal-body">
+								<p>${message.replace(/\n/g, '<br>')}</p>
+							</div>
+							<div class="test-modal-footer">
+								<button class="btn btn-primary" onclick="$('#testModal').fadeOut(300, function() { $(this).remove(); })">OK</button>
+							</div>
+						</div>
+					</div>
+				`;
+				
+				$('body').append(modalHtml);
+				$('#testModal').hide().fadeIn(300);
+			}
+			
+			// Confirmation dialog function
+			function showConfirm(title, message, onConfirm, onCancel) {
+				// Remove existing modal if any
+				$('#confirmModal').remove();
+				
+				var modalHtml = `
+					<div id="confirmModal" class="test-modal-overlay">
+						<div class="test-modal">
+							<div class="test-modal-header">
+								<div class="modal-icon-warning"><i class="material-icons">help_outline</i></div>
+								<h3 style="color: #f59e0b">${title}</h3>
+							</div>
+							<div class="test-modal-body">
+								<p>${message}</p>
+							</div>
+							<div class="test-modal-footer">
+								<button class="btn btn-secondary" id="confirmCancel" style="margin-right: 10px;">Cancel</button>
+								<button class="btn btn-danger" id="confirmOk">Delete</button>
+							</div>
+						</div>
+					</div>
+				`;
+				
+				$('body').append(modalHtml);
+				$('#confirmModal').hide().fadeIn(300);
+				
+				$('#confirmOk').click(function() {
+					$('#confirmModal').fadeOut(300, function() { $(this).remove(); });
+					if(onConfirm) onConfirm();
+				});
+				
+				$('#confirmCancel').click(function() {
+					$('#confirmModal').fadeOut(300, function() { $(this).remove(); });
+					if(onCancel) onCancel();
+				});
+			}
+
 			// Delete row on delete button click
 			$(document).on("click", ".delete", function() {
 				var obj = $(this);
 				var id = obj.parents("tr").attr('data-id');
 				var data = {'delete': true, 'id': id}
 				
-				if(confirm('Data source will be deleted ?')){
+				showConfirm('Delete Datasource', 'Are you sure you want to delete this datasource?', function() {
 					if('<?=$action?>' == 'pglink'){
 						let host = obj.closest("tr").children("td").eq(2).text();
-						if((host == 'localhost') && confirm('Delete local database too ?')){
-							data['drop'] = true;
+						if(host == 'localhost') {
+							showConfirm('Delete Database', 'Do you also want to delete the local database?', function() {
+								data['drop'] = true;
+								performDelete(obj, data);
+							}, function() {
+								performDelete(obj, data);
+							});
+							return;
 						}
 					}
-					
-					$.ajax({
-						type: "POST",
-						url: 'action/<?=$action?>.php',
-						data: data,
-						dataType:"json",
-						success: function(response){
-							if(response.success) {
-								obj.parents("tr").remove();
-							}
-
-							$(".add-new").removeAttr("disabled");
-							alert(response.message);
-						}
-					});
-				}
+					performDelete(obj, data);
+				});
 			});
+			
+			function performDelete(obj, data) {
+				$.ajax({
+					type: "POST",
+					url: 'action/<?=$action?>.php',
+					data: data,
+					dataType:"json",
+					success: function(response){
+						if(response.success) {
+							obj.parents("tr").remove();
+						}
+
+						$(".add-new").removeAttr("disabled");
+						showModal(response.success ? 'Success' : 'Error', response.message, response.success ? 'success' : 'error');
+					}
+				});
+			}
 		});
 	</script>
 
@@ -325,6 +453,14 @@ td {
     color: #10b981;
 }
 
+.action-icon.test {
+    color: #8b5cf6;
+}
+
+.action-icon.pwd_vis {
+    color: #6b7280;
+}
+
 .form-control {
     display: block;
     width: 100%;
@@ -346,6 +482,125 @@ td {
 
 .error {
     border-color: #ef4444 !important;
+}
+
+/* Modal Styles */
+.test-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+}
+
+.test-modal {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    max-width: 500px;
+    width: 90%;
+    animation: modalSlideIn 0.3s ease-out;
+}
+
+@keyframes modalSlideIn {
+    from {
+        transform: translateY(-50px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.test-modal-header {
+    padding: 24px 24px 16px;
+    text-align: center;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.test-modal-header h3 {
+    margin: 12px 0 0;
+    font-size: 1.5rem;
+    font-weight: 600;
+}
+
+.modal-icon-success,
+.modal-icon-error,
+.modal-icon-warning {
+    display: inline-block;
+    font-size: 48px;
+}
+
+.modal-icon-success i {
+    color: #10b981;
+}
+
+.modal-icon-error i {
+    color: #ef4444;
+}
+
+.modal-icon-warning i {
+    color: #f59e0b;
+}
+
+.test-modal-body {
+    padding: 24px;
+}
+
+.test-modal-body p {
+    margin: 0;
+    line-height: 1.6;
+    color: #374151;
+    white-space: pre-line;
+}
+
+.test-modal-footer {
+    padding: 16px 24px;
+    text-align: right;
+    border-top: 1px solid #e5e7eb;
+}
+
+.test-modal-footer .btn {
+    min-width: 80px;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-weight: 500;
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s;
+}
+
+.test-modal-footer .btn-primary {
+    background-color: #3b82f6;
+    color: white;
+}
+
+.test-modal-footer .btn-primary:hover {
+    background-color: #2563eb;
+}
+
+.test-modal-footer .btn-secondary {
+    background-color: #6b7280;
+    color: white;
+}
+
+.test-modal-footer .btn-secondary:hover {
+    background-color: #4b5563;
+}
+
+.test-modal-footer .btn-danger {
+    background-color: #ef4444;
+    color: white;
+}
+
+.test-modal-footer .btn-danger:hover {
+    background-color: #dc2626;
 }
 </style>
 
@@ -408,8 +663,14 @@ td {
                                     <a class="action-icon edit" title="Edit" data-toggle="tooltip">
                                         <i class="material-icons">&#xE254;</i>
                                     </a>
+                                    <a class="action-icon test" title="Test Connection" data-toggle="tooltip">
+                                        <i class="material-icons">&#xE8F4;</i>
+                                    </a>
                                     <a class="action-icon delete" title="Delete" data-toggle="tooltip">
                                         <i class="material-icons">&#xE872;</i>
+                                    </a>
+                                    <a class="action-icon pwd_vis" title="Show Password" data-toggle="tooltip">
+                                        <i class="material-icons">visibility</i>
                                     </a>
                                 </td>
                             </tr>
