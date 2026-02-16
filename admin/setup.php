@@ -346,18 +346,20 @@ if(isset($_POST['submit'])){
 			die(pg_last_error($con));
 		}
 
-		# add SMTP configuration for mutt		
-		$mutt_conf_file = '/var/www/.muttrc';
-		$mutt_conf = '';
-		if(is_file($mutt_conf_file)){
-			$mutt_conf = file_get_contents($mutt_conf_file);
+		# add SMTP configuration for mutt (only if provided)
+		if(!empty($_POST['smtp_host']) && !empty($_POST['smtp_user']) && !empty($_POST['smtp_pass']) && !empty($_POST['smtp_port'])){
+			$mutt_conf_file = '/var/www/.muttrc';
+			$mutt_conf = '';
+			if(is_file($mutt_conf_file)){
+				$mutt_conf = file_get_contents($mutt_conf_file);
+			}
+			
+			# ex. => set smtp_url = 'smtps://user@gmail.com:password@smtp.gmail.com:465/'
+			$mutt_conf .= "\n";
+			$mutt_conf .= "set from='Jasper Report Publisher <".$_POST['smtp_user'].">'\n";
+			$mutt_conf .= "set smtp_url = 'smtp://".$_POST['smtp_user'].":".$_POST['smtp_pass']."@".$_POST['smtp_host'].":".$_POST['smtp_port']."/'\n";
+			file_put_contents($mutt_conf_file, $mutt_conf);
 		}
-		
-		# ex. => set smtp_url = 'smtps://user@gmail.com:password@smtp.gmail.com:465/'
-		$mutt_conf .= "\n";
-		$mutt_conf .= "set from='Jasper Report Publisher <".$_POST['smtp_user'].">'\n";
-		$mutt_conf .= "set smtp_url = 'smtp://".$_POST['smtp_user'].":".$_POST['smtp_pass']."@".$_POST['smtp_host'].":".$_POST['smtp_port']."/'\n";
-		file_put_contents($mutt_conf_file, $mutt_conf);
 
 		user_Class::create_ftp_user($def_user['ftp_user'], $def_user['email'], $def_user['password']);
 		$database->create_user($def_user['ftp_user'], $def_user['pg_password']);
@@ -455,12 +457,13 @@ function pwd_vis(pwd_field_id) {
 				
 					<div>
 						<fieldset>
-							<legend>SMTP</legend>
-							<div class="form-group">
-							<?php foreach($smtp_keys as $k => $t){ ?>
-								<input type="<?=$t?>" class="form-control" placeholder="<?=$k?>" id="smtp_<?=$k?>" name="smtp_<?=$k?>" value="<?=$values['smtp_'.$k]?>" required>
-								<?php if($k == 'pass'){ ?>
-									<a class="icon-link" href="#" title="Show Password" data-toggle="tooltip" data-placement="bottom" data-trigger="hover" onclick="pwd_vis('smtp_pass')">
+						<legend>SMTP (Optional - Email Notifications)</legend>
+						<div class="form-group">
+							<p style="font-size: 13px; color: #6c757d; margin-bottom: 10px;">
+								<i>SMTP configuration is optional. You can skip this step and configure it later in the application settings if needed for email notifications and scheduled reports.</i>
+							</p>
+						<?php foreach($smtp_keys as $k => $t){ ?>
+							<input type="<?=$t?>" class="form-control" placeholder="<?=$k?> (optional)" id="smtp_<?=$k?>" name="smtp_<?=$k?>" value="<?=$values['smtp_'.$k]?>">
 										<i id="smtp_pass_vis_i" class="material-icons" style="color:grey">visibility</i>
 									</a>
 								<?php } ?>
